@@ -1,6 +1,6 @@
-# REST API Starter
+# Encore Test Project
 
-This is a RESTful API Starter with a single Hello World API endpoint.
+This is a multi-service application built with Encore.ts, featuring several microservices that work together.
 
 ## Prerequisites 
 
@@ -9,34 +9,92 @@ This is a RESTful API Starter with a single Hello World API endpoint.
 - **Linux:** `curl -L https://encore.dev/install.sh | bash`
 - **Windows:** `iwr https://encore.dev/install.ps1 | iex`
 
-## Create app
+## Services Overview
 
-Create a local app from this template:
+This application consists of the following services:
 
+### 1. Hello Service
+A simple greeting service that responds with a personalized "Hello" message.
+
+**Endpoints:**
+- `GET /hello/:name` - Returns a greeting with the provided name
+
+**Example:**
 ```bash
-encore app create my-app-name --example=ts/hello-world
+curl http://localhost:4001/hello/World
 ```
 
-## Run app locally
+### 2. Goodbye Service
+A farewell service that responds with customizable goodbye messages.
+
+**Endpoints:**
+- `GET /goodbye/:name` - Returns a goodbye message with the provided name
+- `GET /goodbye?name=<name>&message=<message>` - Returns a customized goodbye message
+
+**Example:**
+```bash
+curl http://localhost:4001/goodbye/World
+curl "http://localhost:4001/goodbye?name=World&message=Hasta%20la%20vista"
+```
+
+### 3. Items Service
+A service for managing items in a database.
+
+**Endpoints:**
+- `POST /create-item` - Creates a new item
+- `GET /items` - Lists all items
+- `PUT /items/:id/done` - Marks an item as done
+
+**Example:**
+```bash
+# Create an item
+curl -X POST -H "Content-Type: application/json" -d '{"title":"Buy milk"}' http://localhost:4001/create-item
+
+# List all items
+curl http://localhost:4001/items
+
+# Mark an item as done
+curl -X PUT http://localhost:4001/items/1/done
+```
+
+### 4. User Service
+A service for managing users with pub/sub integration.
+
+**Endpoints:**
+- `POST /user` - Creates a new user
+- `GET /user/:id` - Gets a specific user
+- `GET /users` - Lists all users
+
+**Example:**
+```bash
+# Create a user
+curl -X POST -H "Content-Type: application/json" -d '{"name":"John Doe","email":"john@example.com"}' http://localhost:4001/user
+
+# Get a user
+curl http://localhost:4001/user/1
+
+# List all users
+curl http://localhost:4001/users
+```
+
+### 5. Email Service
+A service that listens for user creation events and simulates sending welcome emails.
+
+This service doesn't expose any public endpoints but subscribes to the `user-added` topic to process user creation events.
+
+## Running the Application
 
 Run this command from your application's root folder:
 
 ```bash
-encore run
-```
-### Using the API
-
-To see that your app is running, you can ping the API.
-
-```bash
-curl http://localhost:4000/hello/World
+encore run --port=4001
 ```
 
-### Local Development Dashboard
+## Local Development Dashboard
 
 While `encore run` is running, open [http://localhost:9400/](http://localhost:9400/) to access Encore's [local developer dashboard](https://encore.dev/docs/observability/dev-dash).
 
-Here you can see traces for all requests that you made, see your architecture diagram (just a single service for this simple example), and view API documentation in the Service Catalog.
+Here you can see traces for all requests that you made, see your architecture diagram, and view API documentation in the Service Catalog.
 
 ## Development
 
@@ -66,13 +124,13 @@ Learn more in the docs: https://encore.dev/docs/ts/primitives/defining-apis
 Calling API endpoints between services looks like regular function calls with Encore.ts.
 The only thing you need to do is import the service you want to call from `~encore/clients` and then call its API endpoints like functions.
 
-In the example below, we import the service `hello` and call the `ping` endpoint using a function call to `hello.ping`:
+In the example below, we import the service `hello` and call the `get` endpoint using a function call to `hello.get`:
 
 ```ts
 import { hello } from "~encore/clients"; // import 'hello' service
 
 export const myOtherAPI = api({}, async (): Promise<void> => {
-  const resp = await hello.ping({ name: "World" });
+  const resp = await hello.get({ name: "World" });
   console.log(resp.message); // "Hello World!"
 });
 ```
@@ -92,20 +150,41 @@ const db = new SQLDatabase("todo", {
 });
 ```
 
-Then create a directory `migrations` inside the service directory and add a migration file `0001_create_table.up.sql` to define the database schema. For example:
+Then create a directory `migrations` inside the service directory and add a migration file `1_create_table.up.sql` to define the database schema. For example:
 
 ```sql
 CREATE TABLE todo_item (
-  id BIGSERIAL PRIMARY KEY,
+  id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,
   done BOOLEAN NOT NULL DEFAULT false
-  -- etc...
 );
 ```
 
 Once you've added a migration, restart your app with `encore run` to start up the database and apply the migration. Keep in mind that you need to have [Docker](https://docker.com) installed and running to start the database.
 
 Learn more in the docs: https://encore.dev/docs/ts/primitives/databases
+
+### Pub/Sub
+
+This application demonstrates the use of Pub/Sub for event-driven communication between services. The User service publishes events when a new user is created, and the Email service subscribes to these events to send welcome emails.
+
+```ts
+// Publishing events
+export const UserAddedTopic = new Topic<UserRequest>("user-added", {
+  deliveryGuarantee: "at-least-once",
+});
+
+await UserAddedTopic.publish({ name, email });
+
+// Subscribing to events
+const _ = new Subscription(UserAddedTopic, "welcome-email", {
+  handler: async (event) => {
+    await send(event);
+  },
+});
+```
+
+Learn more in the docs: https://encore.dev/docs/ts/primitives/pubsub
 
 ### Learn more
 
@@ -114,7 +193,6 @@ There are many more features to explore in Encore.ts, for example:
 - [Request Validation](https://encore.dev/docs/ts/primitives/validation)
 - [Streaming APIs](https://encore.dev/docs/ts/primitives/streaming-apis)
 - [Cron jobs](https://encore.dev/docs/ts/primitives/cron-jobs)
-- [Pub/Sub](https://encore.dev/docs/ts/primitives/pubsub)
 - [Object Storage](https://encore.dev/docs/ts/primitives/object-storage)
 - [Secrets](https://encore.dev/docs/ts/primitives/secrets)
 - [Authentication handlers](https://encore.dev/docs/ts/develop/auth)
@@ -137,19 +215,6 @@ git push encore
 ```
 
 You can also open your app in the [Cloud Dashboard](https://app.encore.dev) to integrate with GitHub, or connect your AWS/GCP account, enabling Encore to automatically handle cloud deployments for you.
-
-## Link to GitHub
-
-Follow these steps to link your app to GitHub:
-
-1. Create a GitHub repo, commit and push the app.
-2. Open your app in the [Cloud Dashboard](https://app.encore.dev).
-3. Go to **Settings ➔ GitHub** and click on **Link app to GitHub** to link your app to GitHub and select the repo you just created.
-4. To configure Encore to automatically trigger deploys when you push to a specific branch name, go to the **Overview** page for your intended environment. Click on **Settings** and then in the section **Branch Push** configure the **Branch name** and hit **Save**.
-5. Commit and push a change to GitHub to trigger a deploy.
-
-[Learn more in the docs](https://encore.dev/docs/how-to/github)
-
 
 ## Testing
 
